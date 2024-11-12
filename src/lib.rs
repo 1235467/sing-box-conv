@@ -1,7 +1,6 @@
-use reqwest::Body;
 use worker::*;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json;
 
 #[derive(Serialize, Deserialize)]
 struct Rules {
@@ -23,8 +22,7 @@ struct Domain {
 }
 
 #[event(fetch)]
-async fn main(req: Request, env: Env, ctx: Context) -> Result<Response> {
-    let url = "https://raw.githubusercontent.com/DH-Teams/DH-Geo_AS_IP_CN/refs/heads/main/Geo_AS_IP_CN_All_Clash.yaml";
+async fn main(req: Request, _: Env, _: Context) -> Result<Response> {
     //use reqwest to get the content of the url 
     let url = req.path().trim_start_matches("/").to_string();
     let res = reqwest::get(url).await;
