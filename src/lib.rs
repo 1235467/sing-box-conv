@@ -5,7 +5,7 @@ use serde_json;
 #[derive(Serialize, Deserialize)]
 struct Rules {
     version: i32,
-    rules: Vec<Rule>
+    rules: Vec<Rule>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -18,69 +18,59 @@ struct Rule {
 
 #[derive(Serialize, Deserialize)]
 struct Domain {
-    
+    // Assuming you need to fill this in later
 }
 
 #[event(fetch)]
-async fn main(req: Request, _: Env, _: Context) -> Result<Response> {
-    //use reqwest to get the content of the url 
-    let url = req.path().trim_start_matches("/").to_string();
-    let res = reqwest::get(url).await;
-    let body = match res {
-        Ok(res) => res.text().await.unwrap_or_else(|_| "error".to_string()),
-        Err(_) => "error".to_string()
+async fn main(req: Request, _: Env, _: Context) -> Result<Response>   {
+    let url = req.path().trim_start_matches('/').to_string();
+    let body = match reqwest::get(&url).await {
+        Ok(response) => response.text().await.unwrap_or_else(|_| "error".to_string()),
+        Err(_) => "error".to_string(),
     };
-    //read every line of body and convert yaml to json 
-    let ip_cidrs: Vec<String> = body.lines()
-        .filter(|line| line.contains("IP-CIDR") && !line.contains("IP-CIDR6"))
-        .map(|line| line
-            .trim_start_matches("  - IP-CIDR,")
-            .trim_end_matches(",no-resolve")
-            .to_string())
-        .collect();
-    let ip6_cidrs: Vec<String> = body.lines()
-        .filter(|line| line.contains("IP-CIDR6"))
-        .map(|line| line
-            .trim_start_matches("  - IP-CIDR6,")
-            .trim_end_matches(",no-resolve")
-            .to_string())
-        .collect();
 
-    let domain_suffix: Vec<String> = body.lines()
-        .filter(|line| line.contains("DOMAIN-SUFFIX"))
-        .map(|line| line
-            .split(',')           // Split at comma
-            .nth(1)              // Take first part
-            .unwrap_or("")       // Handle potential None
-            .to_string())
-        .collect();
+    let mut ip_cidrs = Vec::new();
+    let mut ip6_cidrs = Vec::new();
+    let mut domain = Vec::new();
+    let mut domain_suffix = Vec::new();
+    let mut domain_keyword = Vec::new();
 
-    let domain: Vec<String> = body.lines()
-        .filter(|line| line.contains("DOMAIN") && !line.contains("DOMAIN-SUFFIX") && !line.contains("DOMAIN-KEYWORD"))
-        .map(|line| line
-            .split(',')           // Split at comma
-            .nth(1)               // Take first part
-            .unwrap_or("")       // Handle potential None
-            .to_string())
-        .collect();
+    for line in body.lines() {
+        if line.contains("IP-CIDR") && !line.contains("IP-CIDR6") {
+            if let Some(domain) = line.split(',').nth(1) {
+                ip_cidrs.push(domain.into());
+            }
+        } else if line.contains("IP-CIDR6") {
+            if let Some(domain) = line.split(',').nth(1) {
+                ip6_cidrs.push(domain.into());
+            }
+        } else if line.contains("DOMAIN-SUFFIX") {
+            if let Some(domain) = line.split(',').nth(1) {
+                domain_suffix.push(domain.into());
+            }
+        } else if line.contains("DOMAIN") && !line.contains("DOMAIN-SUFFIX") && !line.contains("DOMAIN-KEYWORD") {
+            if let Some(dom) = line.split(',').nth(1) {
+                domain.push(dom.into());
+            }
+        } else if line.contains("DOMAIN-KEYWORD") {
+            if let Some(keyword) = line.split(',').nth(1) {
+                domain_keyword.push(keyword.into());
+            }
+        }
+    }
 
-    let domain_keyword: Vec<String> = body.lines()
-        .filter(|line| line.contains("DOMAIN-KEYWORD"))
-        .map(|line| line
-            .split(',')           // Split at comma
-            // Take second part 
-            .nth(1)
-            .unwrap_or("")       // Handle potential None
-            .to_string())
-        .collect();
-    
-    let ipcidr_final: Vec<String> = ip_cidrs.iter().chain(ip6_cidrs.iter()).cloned().collect(); 
+    let ipcidr_final = ip_cidrs.into_iter().chain(ip6_cidrs).collect();
 
     let rules = Rules {
         version: 1,
-        rules: vec![Rule { ip_cidr: ipcidr_final, domain: domain, domain_suffix: domain_suffix, domain_keyword: domain_keyword}]
+        rules: vec![Rule {
+            ip_cidr: ipcidr_final,
+            domain,
+            domain_suffix,
+            domain_keyword,
+        }],
     };
-    let json_string = serde_json::to_string(&rules)?;
 
-    Response::ok(format!("{}", json_string))
+    let json_string = serde_json::to_string(&rules)?;
+    Response::ok(json_string)
 }
