@@ -16,17 +16,12 @@ struct Rule {
     domain_keyword: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize)]
-struct Domain {
-    // Assuming you need to fill this in later
-}
-
 #[event(fetch)]
 async fn main(req: Request, _: Env, _: Context) -> Result<Response>   {
     let url = req.path().trim_start_matches('/').to_string();
     let body = match reqwest::get(&url).await {
-        Ok(response) => response.text().await.unwrap_or_else(|_| "error".to_string()),
-        Err(_) => "error".to_string(),
+       Ok(response) => response.text().await.unwrap_or_else(|_| "error".to_string()),
+       Err(_) => "error".to_string(),
     };
 
     let mut ip_cidrs = Vec::new();
