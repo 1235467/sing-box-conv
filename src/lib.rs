@@ -1,6 +1,6 @@
 use worker::*;
 use serde::{Deserialize, Serialize};
-use serde_json;
+use serde_json_wasm as serde_json;
 
 #[derive(Serialize, Deserialize)]
 struct Rules {
@@ -66,6 +66,6 @@ async fn main(req: Request, _: Env, _: Context) -> Result<Response>   {
         }],
     };
 
-    let json_string = serde_json::to_string(&rules)?;
+    let json_string = serde_json::to_string(&rules).unwrap();
     Response::ok(json_string)
 }
