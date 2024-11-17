@@ -1,9 +1,6 @@
 name = "sing-box-conv"
 main = "build/worker/shim.mjs"
 compatibility_date = "2024-11-11"
-kv_namespaces = [
-  { binding = "SING_BOX_RULE", id = "bc4025eb767b40729c09bc70cffb2d4a" }
-]
 
 [build]
 command = "cargo install -q worker-build && worker-build --release"
