@@ -93,30 +93,33 @@ async fn main(req: Request, _env: Env, _ctx: Context) -> Result<Response> {
         // <-- LOGGING INSIDE LOOP
         // console_log!("Processing line: '{}'", trimmed_line); // Can be noisy, enable if needed
 
-        if let Some((rule_type_raw, value_raw)) = trimmed_line.split_once(',') {
-            let rule_type = rule_type_raw.trim();
-            let value = value_raw.trim().to_string(); // Trim and own
+        let parts: Vec<&str> = trimmed_line.split(',').map(str::trim).collect();
+
+    if parts.len() >= 2 {
+        let rule_type = parts[0];
+        // --- > Get only the second part as the value <---
+        let value = parts[1].to_string();
 
              // <-- LOGGING SPLIT
              // console_log!("Split OK: type='{}', value='{}'", rule_type, value); // Enable if needed
 
             match rule_type {
-                "- IP-CIDR" | "- IP-CIDR6" => { // Combine match arms
+                "- IP-CIDR" | "- IP-CIDR6" | "IP-CIDR" | "IP-CIDR6" => { // Combine match arms
                     // console_log!("Matched IP-CIDR/6: {}", value); // Enable if needed
                     ipcidr_final.push(value);
                     processed_lines += 1;
                 }
-                "- DOMAIN-SUFFIX" => {
+                "- DOMAIN-SUFFIX" | "DOMAIN-SUFFIX" => {
                     // console_log!("Matched DOMAIN-SUFFIX: {}", value); // Enable if needed
                     domain_suffix.push(value);
                     processed_lines += 1;
                 }
-                "- DOMAIN-KEYWORD" => {
+                "- DOMAIN-KEYWORD" | "DOMAIN-KEYWORD" => {
                      // console_log!("Matched DOMAIN-KEYWORD: {}", value); // Enable if needed
                     domain_keyword.push(value);
                     processed_lines += 1;
                 }
-                "- DOMAIN" => {
+                "- DOMAIN" | "DOMAIN" => {
                     // console_log!("Matched DOMAIN: {}", value); // Enable if needed
                     domain.push(value);
                     processed_lines += 1;
