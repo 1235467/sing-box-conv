@@ -1,6 +1,7 @@
 use worker::*;
 use serde::{Deserialize, Serialize};
 use serde_json_wasm as serde_json;
+use regex::Regex;
 
 #[derive(Serialize, Deserialize)]
 struct Rules {
@@ -29,7 +30,6 @@ async fn main(req: Request, _env: Env, _ctx: Context) -> Result<Response> {
         console_error!("Missing URL in path"); // Log error
         return Response::error("Missing URL in path", 400);
     }
-    console_log!("Attempting to fetch URL: {}", url_str); // <-- LOG URL
 
     // 2. Fetch
     let url = match worker::Url::parse(url_str) {
@@ -48,7 +48,6 @@ async fn main(req: Request, _env: Env, _ctx: Context) -> Result<Response> {
     };
 
     let status = response.status_code();
-    console_log!("Received status {} for URL: {}", status, url_str); // <-- LOG STATUS
 
     // 3. Read Body (read even if status is not success for debugging)
     let body = match response.text().await {
@@ -62,27 +61,20 @@ async fn main(req: Request, _env: Env, _ctx: Context) -> Result<Response> {
     // Check status *after* attempting to read body
      if !(200..=299).contains(&status) {
          console_error!(
-             "Remote server error for '{}': Status {}, Body sample: '{}'",
+             "Remote server error for '{}': Status {}",
              url_str,
-             status,
-             body.chars().take(200).collect::<String>() // Log first 200 chars of bad response
+             status
          );
          return Response::error(format!("Remote server returned status: {}", status), 502);
      }
 
-    // <-- LOG THE RAW BODY
-    console_log!(
-        "Raw body received (first 500 chars) for '{}':\n{}",
-        url_str,
-        body.chars().take(500).collect::<String>()
-    );
 
-    // 4. Parse
-    let mut ipcidr_final = Vec::new();
-    let mut domain = Vec::new();
-    let mut domain_suffix = Vec::new();
-    let mut domain_keyword = Vec::new();
-    let mut processed_lines = 0; // Counter for debugging
+    // 4. Parse - Pre-allocate vectors based on estimated content
+    let estimated_rules = body.lines().count() / 10; // Rough estimate
+    let mut ipcidr_final = Vec::with_capacity(estimated_rules);
+    let mut domain = Vec::with_capacity(estimated_rules / 4);
+    let mut domain_suffix = Vec::with_capacity(estimated_rules / 4);
+    let mut domain_keyword = Vec::with_capacity(estimated_rules / 4);
 
     for line in body.lines() {
         let trimmed_line = line.trim();
@@ -90,52 +82,31 @@ async fn main(req: Request, _env: Env, _ctx: Context) -> Result<Response> {
             continue;
         }
 
-        // <-- LOGGING INSIDE LOOP
-        // console_log!("Processing line: '{}'", trimmed_line); // Can be noisy, enable if needed
 
         let parts: Vec<&str> = trimmed_line.split(',').map(str::trim).collect();
 
-    if parts.len() >= 2 {
-        let rule_type = parts[0];
-        // --- > Get only the second part as the value <---
-        let value = parts[1].to_string();
-
-             // <-- LOGGING SPLIT
-             // console_log!("Split OK: type='{}', value='{}'", rule_type, value); // Enable if needed
+        if parts.len() >= 2 {
+            let rule_type = parts[0];
+            let value = parts[1];
 
             match rule_type {
-                "- IP-CIDR" | "- IP-CIDR6" | "IP-CIDR" | "IP-CIDR6" => { // Combine match arms
-                    // console_log!("Matched IP-CIDR/6: {}", value); // Enable if needed
-                    ipcidr_final.push(value);
-                    processed_lines += 1;
+                "- IP-CIDR" | "- IP-CIDR6" | "IP-CIDR" | "IP-CIDR6" => {
+                    ipcidr_final.push(value.to_string());
                 }
                 "- DOMAIN-SUFFIX" | "DOMAIN-SUFFIX" => {
-                    // console_log!("Matched DOMAIN-SUFFIX: {}", value); // Enable if needed
-                    domain_suffix.push(value);
-                    processed_lines += 1;
+                    domain_suffix.push(value.to_string());
                 }
                 "- DOMAIN-KEYWORD" | "DOMAIN-KEYWORD" => {
-                     // console_log!("Matched DOMAIN-KEYWORD: {}", value); // Enable if needed
-                    domain_keyword.push(value);
-                    processed_lines += 1;
+                    domain_keyword.push(value.to_string());
                 }
                 "- DOMAIN" | "DOMAIN" => {
-                    // console_log!("Matched DOMAIN: {}", value); // Enable if needed
-                    domain.push(value);
-                    processed_lines += 1;
+                    domain.push(value.to_string());
                 }
-                _ => {
-                    // <-- LOG UNMATCHED TYPES
-                    console_log!("Unknown rule type found: '{}' on line: '{}'", rule_type, trimmed_line);
-                 }
+                _ => {}
             }
-        } else {
-            // <-- LOG LINES THAT DIDN'T SPLIT
-            console_log!("Line did not contain ',': '{}'", trimmed_line);
         }
     }
 
-    console_log!("Finished processing. Found {} matching rules.", processed_lines); // <-- LOG COUNT
 
     // 5. Construct & Serialize
     let rules = Rules {
