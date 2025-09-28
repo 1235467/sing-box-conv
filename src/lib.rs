@@ -1,7 +1,6 @@
 use worker::*;
 use serde::{Deserialize, Serialize};
 use serde_json_wasm as serde_json;
-use regex::Regex;
 
 #[derive(Serialize, Deserialize)]
 struct Rules {
